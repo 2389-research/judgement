@@ -242,4 +242,26 @@ goreleaser release --snapshot --clean
 Snapshot artifacts go into the ignored `dist/` directory. Pushing a version tag
 such as `v1.2.3` triggers the release workflow, runs tests, and publishes archives
 and checksums to this repository's GitHub Releases using its `GITHUB_TOKEN`.
-No Homebrew tap is configured.
+Stable releases also update `Formula/judgement.rb` in
+[`2389-research/homebrew-tap`](https://github.com/2389-research/homebrew-tap),
+using the repository secret `HOMEBREW_TAP_TOKEN`. The token needs write access
+to that tap. Prereleases leave the stable formula unchanged. The formula installs
+the matching prebuilt archive for macOS or Linux on amd64 or arm64. The generator
+checks each archive against its release checksum before emitting the formula.
+
+After building a snapshot, validate formula generation without a token:
+
+```sh
+go run ./internal/cmd/homebrew-formula --dist dist > dist/judgement.rb
+ruby -c dist/judgement.rb
+```
+
+On macOS with Homebrew and its required Command Line Tools installed, run
+`ruby scripts/test-homebrew.rb` to install and test the snapshot through a
+temporary local tap. It refuses to replace an existing Judgement installation
+and cleans up its test installation and tap afterward, reporting cleanup failures.
+CI runs this same check.
+
+After the first stable release publishes the formula, install with
+`brew install 2389-research/tap/judgement`. CI validates generation; the first
+tagged release will also verify the stored token's write access to the tap.
