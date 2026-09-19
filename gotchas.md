@@ -42,3 +42,9 @@ The 2026-09-19 documentation audit corrected cache size-error behavior, conditio
 human cache status, and the literal dev version. Keep these claims tied to source;
 the report is in docs/audits/AUDIT_REPORT_2026-09-19.md. Live verification ran after
 the initial public push; README and the audit addendum record the passing result.
+
+Release builds use stable Go; the CI compatibility job separately tests Go 1.23.
+Using go-version-file with this module would select the original Go 1.23.0 release.
+The global hook on this machine already calls prek, so keep core.hooksPath intact.
+Commit hooks clear TYPESAFE_API_KEY to avoid billed requests; explicit scripts/check
+with the key exported includes the live test.
