@@ -1,0 +1,43 @@
+# ABOUTME: Builds Judgement release binaries for macOS and Linux without CGO.
+# ABOUTME: Packages versioned archives and checksums for GitHub releases.
+version: 2
+
+project_name: judgement
+
+builds:
+  - main: .
+    binary: judgement
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  github:
+    owner: 2389-research
+    name: judgement
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'

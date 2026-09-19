@@ -19,8 +19,9 @@ import (
 	typesafe "github.com/2389-research/typesafe-go"
 )
 
+var version = "dev"
+
 const (
-	version              = "dev"
 	defaultTimeout       = 30 * time.Second
 	defaultCacheTTL      = 24 * time.Hour
 	maximumInputBytes    = 1 << 20
@@ -421,7 +422,7 @@ func decodeInput(reader io.Reader) (requestInput, error) {
 	var input requestInput
 	if err := decoder.Decode(&input); err != nil {
 		if strings.Contains(err.Error(), "unknown field") {
-			return requestInput{}, fmt.Errorf("JSON input has an %s", err)
+			return requestInput{}, fmt.Errorf("JSON input has an %w", err)
 		}
 		return requestInput{}, fmt.Errorf("input must be valid JSON: %w", err)
 	}

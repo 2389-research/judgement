@@ -122,7 +122,9 @@ JSON, and input over 1 MiB are rejected.
 `--json` emits exactly one JSON object on stdout, including on errors. Stderr
 stays empty unless writing output fails. Always check the process exit status.
 `--json --help` describes flags, environment, and input as JSON;
-`--json --version` currently returns `{"type":"version","version":"dev"}`.
+`--json --version` returns the version envelope, such as
+`{"type":"version","version":"dev"}` for a source build. Release archives report
+their tagged version.
 
 Result objects have these fields:
 
@@ -189,9 +191,9 @@ request through the built CLI. Without a key, it reports that test as not run.
 Transport integration tests use a local HTTP fixture to inspect actual SDK
 requests and exercise response handling; they do not establish live model behavior.
 
-As of 2026-09-19, local checks pass, but the live API test has not run because
-no API key was available. Live response compatibility remains unverified. With
-a key, the end-to-end test checks a real judgment and then reuses its cached result.
+On 2026-09-19, the full gate passed with a real TypeSafe API key, including the
+live arithmetic judgment and reuse of its cached result. This verifies that
+scenario against the live API; it does not establish accuracy on other questions.
 
 To work against local SDK edits without changing the pinned module dependency:
 
@@ -201,3 +203,43 @@ go work init . ../typesafe-go
 
 The workspace files are ignored. Remove `go.work` and `go.work.sum` to return to
 the pinned dependency.
+
+### Commit checks and CI
+
+Install [golangci-lint](https://golangci-lint.run/docs/welcome/install/)
+v2.13.2, [GoReleaser](https://goreleaser.com/install/) v2,
+[actionlint](https://github.com/rhysd/actionlint) v1.7.12, and
+[prek](https://prek.j178.dev/). Then enable the hooks:
+
+```sh
+prek install
+prek run --all-files
+```
+
+The `.pre-commit-config.yaml` also works with `pre-commit`. Hooks check whitespace,
+YAML, file size, merge conflicts, private keys, Go formatting, module tidiness,
+the canonical local gate, and workflow/release configuration. Hooks run with
+`TYPESAFE_API_KEY` empty so committing never triggers billed API tests. Run
+`scripts/check` with the key exported when you want live verification. The CLI
+and check script do not load `.env` automatically; that file is ignored by Git.
+
+GitHub CI runs on pushes to `main` and pull requests targeting `main`. It tests
+Go 1.23 and current stable Go on Linux, plus stable Go on macOS, runs the configured
+linters, validates workflows, and builds release snapshots without publishing.
+Live API tests do not run in CI. Development tools may require newer Go than the
+CLI's minimum supported version.
+
+### Releases
+
+GoReleaser builds macOS and Linux archives for amd64 and arm64 without CGO,
+includes the README, and generates SHA-256 checksums. Validate locally with:
+
+```sh
+goreleaser check
+goreleaser release --snapshot --clean
+```
+
+Snapshot artifacts go into the ignored `dist/` directory. Pushing a version tag
+such as `v1.2.3` triggers the release workflow, runs tests, and publishes archives
+and checksums to this repository's GitHub Releases using its `GITHUB_TOKEN`.
+No Homebrew tap is configured.

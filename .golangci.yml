@@ -1,0 +1,67 @@
+# ABOUTME: Checks Judgement Go code for correctness, security, and maintainability.
+# ABOUTME: Adapts Chronicle's lint policy while keeping tests under analysis.
+
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+  allow-parallel-runners: true
+
+linters:
+  # Keep Chronicle's correctness, security, and style checks; function-size and
+  # comment-punctuation limits do not improve this small CLI's existing code.
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - nilerr
+    - nilnil
+    - errchkjson
+    - contextcheck
+    - prealloc
+    - makezero
+    - misspell
+    - whitespace
+    - gosec
+    - copyloopvar
+    - errorlint
+    - gocritic
+    - unconvert
+    - unparam
+    - wastedassign
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+    govet:
+      enable-all: true
+      disable:
+        - shadow
+        - fieldalignment # Preserve readable field order instead of tuning small structs.
+    misspell:
+      locale: US
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
+    staticcheck:
+      checks:
+        - all
+        - -ST1000 # This project uses ABOUTME headers instead of package comments.
+
+  exclusions:
+    presets: []
+
+formatters:
+  enable:
+    - gofmt
+
+severity:
+  default: error

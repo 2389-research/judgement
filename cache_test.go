@@ -88,7 +88,7 @@ func TestSaveAndLoadCachedResult(t *testing.T) {
 	if info.Mode().Perm() != 0o600 {
 		t.Errorf("cache file mode = %04o, want 0600", info.Mode().Perm())
 	}
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- Read the cache fixture under this test's temporary directory.
 	if err != nil {
 		t.Fatalf("read cache file: %v", err)
 	}
