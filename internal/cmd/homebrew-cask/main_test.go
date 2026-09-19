@@ -1,5 +1,5 @@
-// ABOUTME: Verifies formula rendering against actual local release artifacts.
-// ABOUTME: Covers platform selection, corrupted inputs, and command execution.
+// ABOUTME: Verifies cask rendering against actual local release artifacts.
+// ABOUTME: Covers macOS architecture selection, corrupted inputs, and command execution.
 
 package main
 
@@ -36,7 +36,7 @@ func writeFixture(t *testing.T, dir, name, content string) {
 	}
 }
 
-func TestFormulaPlatforms(t *testing.T) {
+func TestCaskArchitectures(t *testing.T) {
 	for _, version := range []string{"1.2.3", "1.2.3+build-7", "0.0.0-SNAPSHOT-abc123"} {
 		t.Run(version, func(t *testing.T) {
 			dir := releaseFixture(t, version)
@@ -44,19 +44,30 @@ func TestFormulaPlatforms(t *testing.T) {
 			if code := run([]string{"--dist", dir}, &out, &stderr); code != 0 {
 				t.Fatalf("exit %d: %s", code, &stderr)
 			}
-			for _, platform := range []struct{ os, cpu, archive string }{
-				{"macos", "intel", "darwin_amd64"}, {"macos", "arm", "darwin_arm64"},
-				{"linux", "intel", "linux_amd64"}, {"linux", "arm", "linux_arm64"},
+			armSHA := fmt.Sprintf("%x", sha256.Sum256([]byte("darwin_arm64")))
+			intelSHA := fmt.Sprintf("%x", sha256.Sum256([]byte("darwin_amd64")))
+			for _, want := range []string{
+				`cask "judgement" do`,
+				`arch arm: "arm64", intel: "amd64"`,
+				fmt.Sprintf(`version %q`, version),
+				`arm:   "` + armSHA + `"`,
+				`intel: "` + intelSHA + `"`,
+				`url "https://github.com/2389-research/judgement/releases/download/v#{version}/judgement_#{version}_darwin_#{arch}.tar.gz"`,
+				`name "Judgement"`,
+				`desc "Choose the best answer with TypeSafe Jev"`,
+				`homepage "https://github.com/2389-research/judgement"`,
+				`binary "judgement", target: "judgement"`,
 			} {
-				want := fmt.Sprintf("  on_%s do\n    on_%s do\n      url \"https://github.com/2389-research/judgement/releases/download/v%s/judgement_%s_%s.tar.gz\"\n      sha256 \"%x\"", platform.os, platform.cpu, version, version, platform.archive, sha256.Sum256([]byte(platform.archive)))
 				if !strings.Contains(out.String(), want) {
-					t.Errorf("missing mapping %s: %s", platform.archive, &out)
+					t.Errorf("missing %q in:\n%s", want, &out)
 				}
 			}
-			for _, want := range []string{"class Judgement < Formula", `bin.install "judgement"`, `system "#{bin}/judgement", "--version"`} {
-				if !strings.Contains(out.String(), want) {
-					t.Errorf("missing %q", want)
-				}
+			// A cask is macOS-only; the Linux archives must never appear.
+			if strings.Contains(out.String(), "linux") {
+				t.Errorf("cask must not reference linux:\n%s", &out)
+			}
+			if strings.Contains(out.String(), "Formula") {
+				t.Errorf("output must be a cask, not a formula:\n%s", &out)
 			}
 		})
 	}
@@ -64,10 +75,10 @@ func TestFormulaPlatforms(t *testing.T) {
 
 func TestRejectBrokenRelease(t *testing.T) {
 	for _, tc := range []struct{ name, file, content, want string }{
-		{"missing archive", "judgement_1.2.3_linux_arm64.tar.gz", "", "archive"},
-		{"corrupt archive", "judgement_1.2.3_linux_arm64.tar.gz", "corrupted", "checksum"},
+		{"missing archive", "judgement_1.2.3_darwin_arm64.tar.gz", "", "archive"},
+		{"corrupt archive", "judgement_1.2.3_darwin_arm64.tar.gz", "corrupted", "checksum"},
 		{"missing checksum", "checksums.txt", "", "checksum"},
-		{"invalid checksum", "checksums.txt", "oops  judgement_1.2.3_linux_arm64.tar.gz\n", "checksum"},
+		{"invalid checksum", "checksums.txt", "oops  judgement_1.2.3_darwin_arm64.tar.gz\n", "checksum"},
 		{"wrong project", "metadata.json", `{"project_name":"other","tag":"v1.2.3","version":"1.2.3"}`, "metadata"},
 		{"traversal", "metadata.json", `{"project_name":"judgement","tag":"v1.2.3","version":"../../evil"}`, "metadata"},
 		{"ruby injection", "metadata.json", `{"project_name":"judgement","tag":"#{system('evil')}","version":"1.2.3"}`, "metadata"},
@@ -109,7 +120,7 @@ func TestCommandEntrypoint(t *testing.T) {
 	dir := releaseFixture(t, "1.2.3")
 	cmd := exec.CommandContext(context.Background(), "go", "run", ".", "--dist", dir) // #nosec G204 -- fixed Go command with a test-owned temporary directory.
 	out, err := cmd.CombinedOutput()
-	if err != nil || !bytes.Contains(out, []byte("class Judgement < Formula")) {
+	if err != nil || !bytes.Contains(out, []byte(`cask "judgement" do`)) {
 		t.Fatalf("command: %v %s", err, out)
 	}
 }

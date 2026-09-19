@@ -1,4 +1,4 @@
-// ABOUTME: Renders a Homebrew formula from verified GoReleaser archives.
+// ABOUTME: Renders a Homebrew cask from verified GoReleaser archives.
 // ABOUTME: Reads local build output without publishing or making network calls.
 
 package main
@@ -21,12 +21,12 @@ import (
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
 func run(args []string, stdout, stderr io.Writer) int {
-	flags := flag.NewFlagSet("homebrew-formula", flag.ContinueOnError)
+	flags := flag.NewFlagSet("homebrew-cask", flag.ContinueOnError)
 	var diagnostics strings.Builder
 	flags.SetOutput(&diagnostics)
 	dist := flags.String("dist", "dist", "directory containing GoReleaser metadata.json, checksums.txt, and archives")
 	flags.Usage = func() {
-		_, _ = fmt.Fprintln(&diagnostics, "Usage: homebrew-formula [--dist DIRECTORY]\nVerify four local release archives and print a Homebrew formula to stdout.\n--dist defaults to dist; no files are published.")
+		_, _ = fmt.Fprintln(&diagnostics, "Usage: homebrew-cask [--dist DIRECTORY]\nVerify the two macOS release archives and print a Homebrew cask to stdout.\n--dist defaults to dist; no files are published.")
 	}
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -37,15 +37,15 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	if flags.NArg() != 0 {
-		_, _ = fmt.Fprintln(stderr, "homebrew-formula: unexpected positional arguments; use --help")
+		_, _ = fmt.Fprintln(stderr, "homebrew-cask: unexpected positional arguments; use --help")
 		return 1
 	}
-	formula, err := render(*dist)
+	cask, err := render(*dist)
 	if err == nil {
-		_, err = io.WriteString(stdout, formula)
+		_, err = io.WriteString(stdout, cask)
 	}
 	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "homebrew-formula: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "homebrew-cask: %v\n", err)
 		return 1
 	}
 	return 0
@@ -67,19 +67,18 @@ func render(dist string) (string, error) {
 	}
 	versionPattern := regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$`)
 	if metadata.Project != "judgement" || !versionPattern.MatchString(metadata.Version) || !versionPattern.MatchString(strings.TrimPrefix(metadata.Tag, "v")) {
-		return "", errors.New("metadata must name judgement and contain plain ASCII release version and tag")
+		return "", errors.New("metadata must name judgement with a plain ASCII version and tag")
 	}
 	checksums, err := readChecksums(dist)
 	if err != nil {
 		return "", err
 	}
-	var formula strings.Builder
-	fmt.Fprintf(&formula, "class Judgement < Formula\n  desc \"Choose the best answer with TypeSafe Jev\"\n  homepage \"https://github.com/2389-research/judgement\"\n  version %q\n\n", metadata.Version)
-	for _, platform := range []struct{ os, cpu, archive string }{
-		{"macos", "intel", "darwin_amd64"}, {"macos", "arm", "darwin_arm64"},
-		{"linux", "intel", "linux_amd64"}, {"linux", "arm", "linux_arm64"},
+	// A cask installs the macOS binary only; Homebrew's arch stanza selects between them.
+	shas := make(map[string]string, 2)
+	for _, arch := range []struct{ label, archive string }{
+		{"arm", "darwin_arm64"}, {"intel", "darwin_amd64"},
 	} {
-		name := "judgement_" + metadata.Version + "_" + platform.archive + ".tar.gz"
+		name := "judgement_" + metadata.Version + "_" + arch.archive + ".tar.gz"
 		checksum, exists := checksums[name]
 		if !exists {
 			return "", fmt.Errorf("missing checksum for %s", name)
@@ -87,10 +86,19 @@ func render(dist string) (string, error) {
 		if err := verifyArchive(filepath.Join(dist, name), checksum); err != nil {
 			return "", err
 		}
-		fmt.Fprintf(&formula, "  on_%s do\n    on_%s do\n      url \"https://github.com/2389-research/judgement/releases/download/%s/%s\"\n      sha256 %q\n    end\n  end\n\n", platform.os, platform.cpu, metadata.Tag, name, checksum)
+		shas[arch.label] = checksum
 	}
-	formula.WriteString("  def install\n    bin.install \"judgement\"\n  end\n\n  test do\n    system \"#{bin}/judgement\", \"--version\"\n  end\nend\n")
-	return formula.String(), nil
+	var cask strings.Builder
+	cask.WriteString("cask \"judgement\" do\n")
+	cask.WriteString("  arch arm: \"arm64\", intel: \"amd64\"\n\n")
+	fmt.Fprintf(&cask, "  version %q\n", metadata.Version)
+	fmt.Fprintf(&cask, "  sha256 arm:   %q,\n         intel: %q\n\n", shas["arm"], shas["intel"])
+	cask.WriteString("  url \"https://github.com/2389-research/judgement/releases/download/v#{version}/judgement_#{version}_darwin_#{arch}.tar.gz\"\n")
+	cask.WriteString("  name \"Judgement\"\n")
+	cask.WriteString("  desc \"Choose the best answer with TypeSafe Jev\"\n")
+	cask.WriteString("  homepage \"https://github.com/2389-research/judgement\"\n\n")
+	cask.WriteString("  binary \"judgement\", target: \"judgement\"\nend\n")
+	return cask.String(), nil
 }
 
 func readChecksums(dist string) (map[string]string, error) {
