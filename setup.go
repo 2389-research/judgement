@@ -67,7 +67,7 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		return writeFailure(stdout, stderr, jsonMode, &cliError{"configuration_error", "cannot locate Judgement configuration", 1})
 	}
 	configPath := filepath.Join(directory, "config.json")
-	encoded, err := json.Marshal(storedConfig{APIKey: key})
+	encoded, err := json.Marshal(storedConfig{APIKey: key}) // #nosec G117 -- Setup deliberately persists the key through writePrivateFile with mode 0600.
 	if err != nil {
 		return writeFailure(stdout, stderr, jsonMode, &cliError{"configuration_error", "cannot encode Judgement configuration", 1})
 	}

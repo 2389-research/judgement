@@ -39,7 +39,7 @@ func TestRunSetupJSONReadsStdinAndWritesOnlyAPIKey(t *testing.T) {
 	if envelope.Type != "setup" || envelope.ConfigPath != wantPath {
 		t.Fatalf("envelope = %#v", envelope)
 	}
-	raw, err := os.ReadFile(wantPath)
+	raw, err := os.ReadFile(wantPath) // #nosec G304 -- Read the config fixture under this test's temporary directory.
 	if err != nil {
 		t.Fatal(err)
 	}

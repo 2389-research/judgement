@@ -76,7 +76,7 @@ func loadCachedResult(identity string, input requestInput, ttl time.Duration, no
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&entry); err != nil {
-		return resultOutput{}, false, nil
+		return resultOutput{}, false, nil //nolint:nilerr // Malformed cache entries are cache misses, so callers can fetch a fresh result.
 	}
 	var extra any
 	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {

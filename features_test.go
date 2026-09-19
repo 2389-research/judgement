@@ -196,7 +196,7 @@ func TestCacheDisabledDoesNotCreateStorage(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit=%d out=%q", code, out)
 	}
-	if _, err := os.Stat(os.Getenv("XDG_CACHE_HOME")); !os.IsNotExist(err) {
+	if _, err := os.Stat(os.Getenv("XDG_CACHE_HOME")); !os.IsNotExist(err) { // #nosec G703 -- isolateFeatureStorage sets this path under t.TempDir.
 		t.Fatalf("cache touched without --cache: %v", err)
 	}
 }

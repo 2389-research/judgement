@@ -48,3 +48,10 @@ Fresh-eyes review of the documentation changes found no unresolved misleading
 claims. No production code changed in this audit. There is no license file;
 public visibility alone does not supply a software license, and this audit did
 not choose licensing terms.
+
+## Live verification addendum
+
+After publication, Doctor Biz supplied a key in the local `.env` file. The full
+canonical gate passed, including `TestLiveJudgement`: a real arithmetic judgment
+and a repeated request served from disk with a 1ns network timeout. The key was
+not printed or committed. This closes the live-test gap for that scenario.

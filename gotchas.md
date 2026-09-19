@@ -18,9 +18,10 @@ reads running while the process has intercepted SIGINT/SIGTERM. Process tests
 cover stdin and named pipes. The CLI exits after cancellation; its internal
 input-reading goroutine is not a reusable library API.
 
-Local checks passed on 2026-09-19, but the live test needs an API key before
-shipping; in particular the 1e-6 probability-sum tolerance has only fixture
-coverage. Do not mistake the local HTTP transport fixtures for live API evidence.
+The full gate passed against the live API on 2026-09-19 using the key Doctor Biz
+supplied in .env. The arithmetic response passed validation, and its cached result
+was reused with a 1ns network timeout. This verifies one live scenario, not general
+model accuracy. Never print or commit .env; it is ignored along with .env.*.
 
 Setup uses XDG paths on macOS too, rather than Go's platform-specific config/cache
 defaults. Relative XDG bases are ignored. TYPESAFE_API_KEY overrides saved config.
@@ -39,5 +40,11 @@ rather than treating PENDIN alone as evidence that setup left the terminal raw.
 
 The 2026-09-19 documentation audit corrected cache size-error behavior, conditional
 human cache status, and the literal dev version. Keep these claims tied to source;
-the report is in docs/audits/AUDIT_REPORT_2026-09-19.md. Public source publication
-does not mean the live API test has run; README records that remaining gap.
+the report is in docs/audits/AUDIT_REPORT_2026-09-19.md. Live verification ran after
+the initial public push; README and the audit addendum record the passing result.
+
+Release builds use stable Go; the CI compatibility job separately tests Go 1.23.
+Using go-version-file with this module would select the original Go 1.23.0 release.
+The global hook on this machine already calls prek, so keep core.hooksPath intact.
+Commit hooks clear TYPESAFE_API_KEY to avoid billed requests; explicit scripts/check
+with the key exported includes the live test.

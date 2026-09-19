@@ -21,7 +21,7 @@ import (
 func buildCLI(t *testing.T) string {
 	t.Helper()
 	binary := filepath.Join(t.TempDir(), "judgement")
-	cmd := exec.Command("go", "build", "-o", binary, ".")
+	cmd := exec.Command("go", "build", "-o", binary, ".") // #nosec G204 -- Build this repository into the test's temporary directory.
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build CLI: %v\n%s", err, out)
 	}
@@ -30,7 +30,7 @@ func buildCLI(t *testing.T) string {
 
 func invokeCLI(t *testing.T, binary, input string, args ...string) (string, string, int) {
 	t.Helper()
-	cmd := exec.Command(binary, args...)
+	cmd := exec.Command(binary, args...) // #nosec G204 -- Execute the test-built CLI with test-supplied arguments.
 	cmd.Stdin = strings.NewReader(input)
 	var out, errOut bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errOut
@@ -120,7 +120,7 @@ func TestProcessSetupStoresPrivateKey(t *testing.T) {
 			t.Fatalf("setup: exit=%d out=%q stderr=%q", code, out, stderr)
 		}
 		file := filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "judgement", "config.json")
-		raw, err := os.ReadFile(file)
+		raw, err := os.ReadFile(file) // #nosec G304 G703 -- Read the config fixture under isolateFeatureStorage's temporary directory.
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -147,7 +147,7 @@ func TestProcessSignalWhileReadingStdin(t *testing.T) {
 		t.Skip("POSIX signal scenario")
 	}
 	binary := buildCLI(t)
-	cmd := exec.Command(binary, "--json", "--input", "-")
+	cmd := exec.Command(binary, "--json", "--input", "-") // #nosec G204 -- Execute the test-built CLI to verify signal handling.
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -172,17 +172,17 @@ func TestProcessSignalWhileReadingNamedPipe(t *testing.T) {
 		t.Skip("POSIX named pipe scenario")
 	}
 	pipe := filepath.Join(t.TempDir(), "request.pipe")
-	if out, err := exec.Command("mkfifo", pipe).CombinedOutput(); err != nil {
+	if out, err := exec.Command("mkfifo", pipe).CombinedOutput(); err != nil { // #nosec G204 -- Create a named pipe only under this test's temporary directory.
 		t.Fatalf("mkfifo: %v: %s", err, out)
 	}
 	binary := buildCLI(t)
-	cmd := exec.Command(binary, "--json", "--input", pipe)
+	cmd := exec.Command(binary, "--json", "--input", pipe) // #nosec G204 -- Run the test-built CLI against a test-owned named pipe.
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	writer, err := os.OpenFile(pipe, os.O_WRONLY, 0)
+	writer, err := os.OpenFile(pipe, os.O_WRONLY, 0) // #nosec G304 -- Open the named pipe created in this test's temporary directory.
 	if err != nil {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()

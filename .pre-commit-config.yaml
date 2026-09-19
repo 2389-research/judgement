@@ -1,0 +1,54 @@
+# ABOUTME: Checks repository hygiene and Go code before commits.
+# ABOUTME: Uses the canonical local gate without making billed API requests.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^go\.(mod|sum)$
+      - id: end-of-file-fixer
+        exclude: ^go\.(mod|sum)$
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+      - id: check-case-conflict
+      - id: detect-private-key
+  - repo: local
+    hooks:
+      - id: go-fmt
+        name: gofmt
+        entry: gofmt -w
+        language: system
+        types: [go]
+      - id: go-mod-tidy
+        name: go mod tidy
+        entry: go mod tidy
+        language: system
+        files: '(^go\.(mod|sum)$|\.go$)'
+        pass_filenames: false
+      - id: go-check
+        name: Go format, vet, lint, race tests, and build
+        entry: env TYPESAFE_API_KEY= scripts/check
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: golangci-config
+        name: golangci-lint configuration validation
+        entry: golangci-lint config verify
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: actionlint
+        name: GitHub Actions validation
+        entry: actionlint
+        language: system
+        files: ^\.github/workflows/.*\.ya?ml$
+      - id: goreleaser-check
+        name: GoReleaser configuration validation
+        entry: goreleaser check
+        language: system
+        files: ^\.goreleaser\.ya?ml$
+        pass_filenames: false

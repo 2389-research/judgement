@@ -44,7 +44,7 @@ func TestXDGDirectoryRejectsMissingOrRelativeHome(t *testing.T) {
 
 func TestEnsurePrivateDirectoryCreatesOnlyApplicationDirectoryPrivately(t *testing.T) {
 	parent := filepath.Join(t.TempDir(), "shared")
-	if err := os.Mkdir(parent, 0o755); err != nil {
+	if err := os.Mkdir(parent, 0o755); err != nil { // #nosec G301 -- Verify that private storage leaves a shared parent unchanged.
 		t.Fatal(err)
 	}
 	path := filepath.Join(parent, "judgement")
@@ -61,7 +61,7 @@ func TestEnsurePrivateDirectoryRejectsUnsafeExistingPaths(t *testing.T) {
 	}
 	root := t.TempDir()
 	unsafe := filepath.Join(root, "unsafe")
-	if err := os.Mkdir(unsafe, 0o755); err != nil {
+	if err := os.Mkdir(unsafe, 0o755); err != nil { // #nosec G301 -- Deliberately unsafe fixture must be rejected.
 		t.Fatal(err)
 	}
 	if err := ensurePrivateDirectory(unsafe); err == nil {
@@ -91,7 +91,7 @@ func TestPrivateFileRoundTripUsesPrivateModesAndAtomicReplacement(t *testing.T) 
 	assertMode(t, filepath.Dir(path), 0o700)
 	assertMode(t, path, 0o600)
 
-	if err := os.Chmod(path, 0o644); err != nil {
+	if err := os.Chmod(path, 0o644); err != nil { // #nosec G302 -- Verify replacement restores private permissions on an unsafe fixture.
 		t.Fatal(err)
 	}
 	if err := writePrivateFile(path, []byte("second")); err != nil {
@@ -113,7 +113,7 @@ func TestReadPrivateFileRejectsUnsafeFilesAndBoundsReads(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, "data")
-	if err := os.WriteFile(path, []byte("secret"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("secret"), 0o644); err != nil { // #nosec G306 -- Deliberately unsafe fixture contains only dummy data and must be rejected.
 		t.Fatal(err)
 	}
 	if _, err := readPrivateFile(path, 16); err == nil || containsError(err, "secret") {
@@ -166,7 +166,7 @@ func TestWritePrivateFileRejectsExistingSymlinkAndNonregularFile(t *testing.T) {
 	if err := writePrivateFile(link, []byte("replace")); err == nil {
 		t.Fatal("replaced symlink")
 	}
-	got, err := os.ReadFile(target)
+	got, err := os.ReadFile(target) // #nosec G304 -- Verify the test-owned symlink target retains its original contents.
 	if err != nil || string(got) != "keep" {
 		t.Fatalf("symlink target = %q, %v", got, err)
 	}

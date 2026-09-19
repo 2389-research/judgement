@@ -36,7 +36,7 @@ func ensurePrivateDirectory(path string) error {
 	if err := os.MkdirAll(path, 0o700); err != nil {
 		return fmt.Errorf("cannot create application directory: %w", err)
 	}
-	if err := os.Chmod(path, 0o700); err != nil {
+	if err := os.Chmod(path, 0o700); err != nil { // #nosec G302 -- This is a private directory; owner traversal requires the execute bit.
 		return fmt.Errorf("cannot protect application directory: %w", err)
 	}
 	info, err = os.Lstat(path)
@@ -137,7 +137,7 @@ func readPrivateFile(path string, maxBytes int64) ([]byte, error) {
 		return nil, errors.New("data file exceeds its size limit")
 	}
 
-	file, err := os.Open(path)
+	file, err := os.Open(path) // #nosec G304 -- The caller selects local storage; checks here reject symlinks, unsafe modes, and replacement races.
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, os.ErrNotExist
