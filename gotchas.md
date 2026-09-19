@@ -36,3 +36,8 @@ On macOS, a terminal restore may set the transient PENDIN bit (0x20000000).
 A plain `stty -icanon -echo` followed by restoring the captured state reproduces
 the same difference. Verify echo/canonical/signal flags and restored behavior,
 rather than treating PENDIN alone as evidence that setup left the terminal raw.
+
+The 2026-09-19 documentation audit corrected cache size-error behavior, conditional
+human cache status, and the literal dev version. Keep these claims tied to source;
+the report is in docs/audits/AUDIT_REPORT_2026-09-19.md. Public source publication
+does not mean the live API test has run; README records that remaining gap.

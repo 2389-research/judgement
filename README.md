@@ -9,13 +9,17 @@ used by the sibling checkout during development. Go's `x/term` package handles
 hidden terminal input during setup.
 
 ```sh
+git clone https://github.com/2389-research/judgement.git
+cd judgement
 go build -o judgement .
 ./judgement setup
 ./judgement "What is two plus two?" "four" "nine"
 ```
 
-To install into your Go bin directory, run `go install .` and ensure that directory
-is on your `PATH`. Then use `judgement` without `./`.
+To install without a checkout, run
+`go install github.com/2389-research/judgement@latest`. From a checkout, use
+`go install .`. Ensure your Go bin directory is on `PATH`, then use `judgement`
+without `./`.
 
 ## Setup
 
@@ -44,6 +48,12 @@ arguments. JSON setup requires `--key-stdin` and emits only a confirmation with
 `type: "setup"` and `config_path`; it never prints the key. Canceling the prompt
 leaves an existing credential untouched.
 
+Keys must be a single nonblank token; surrounding whitespace is stripped.
+Input and the encoded config file are each limited to 16 KiB. Config/cache
+application directories and data files must not be symlinks. Existing directories
+and files with group/other permissions are rejected on reads; the CLI does not
+repair their permissions automatically.
+
 ## Opt-in cache
 
 ```sh
@@ -55,8 +65,7 @@ judgement --cache --cache-ttl 15m "Which is a fruit?" "apple" "granite"
 version such as `--model jev-1.13.0`. Moving aliases (`jev-latest`, `jev-preview`)
 and other model names default to **24 hours**. `--cache-ttl` overrides this policy:
 use a positive Go duration for expiry or `0` for no expiry. It requires `--cache`.
-Without `--cache`, each
-judgment calls the API and leaves the cache alone.
+Without `--cache`, each judgment calls the API and leaves the cache alone.
 
 Entries live under `$XDG_CACHE_HOME/judgement`, falling back to
 `$HOME/.cache/judgement`. They store the question, answers, and result with the
@@ -66,8 +75,9 @@ and credential fingerprint. Equivalent JSON and positional inputs share entries;
 changing any request identity field causes a miss.
 
 JSON results include `cached: true` on a hit and `cached: false` on a fresh call.
-Human output shows `Cache: hit` or `Cache: miss`; quiet output remains just the
-answer. Cached usage counts describe the original request, not a new billed call.
+With `--cache`, human output shows `Cache: hit` or `Cache: miss`; quiet output
+remains just the answer. Cached usage counts describe the original request,
+not a new billed call.
 The alias TTL limits how long a name such as `jev-latest` can retain an older
 model's answer. It is an update policy, not an inherent lifetime of a judgment.
 TypeSafe documents that aliases move when releases ship and recommends pinning
@@ -75,8 +85,9 @@ versions when stable behavior matters. For unchanged input and a fixed version,
 we expect long-lived reuse to be appropriate; this does not promise identical
 results on fresh calls. See [TypeSafe model versions](https://docs.typesafe.ai/models).
 
-Failed requests are not cached. Expired or malformed entries are replaced after
-a successful request; filesystem permission/write errors produce `cache_error`
+Failed requests are not cached. Expired entries or entries with invalid JSON or
+result data are replaced after a successful request. Files larger than 16 MiB
+and filesystem permission/write errors produce `cache_error`
 instead of silently disabling caching. There is no background cleanup: deleting
 this application's cache directory clears all entries.
 
@@ -111,7 +122,7 @@ JSON, and input over 1 MiB are rejected.
 `--json` emits exactly one JSON object on stdout, including on errors. Stderr
 stays empty unless writing output fails. Always check the process exit status.
 `--json --help` describes flags, environment, and input as JSON;
-`--json --version` returns the build version.
+`--json --version` currently returns `{"type":"version","version":"dev"}`.
 
 Result objects have these fields:
 
@@ -177,6 +188,10 @@ and compilation. With `TYPESAFE_API_KEY` set, it also runs one real API end-to-e
 request through the built CLI. Without a key, it reports that test as not run.
 Transport integration tests use a local HTTP fixture to inspect actual SDK
 requests and exercise response handling; they do not establish live model behavior.
+
+As of 2026-09-19, local checks pass, but the live API test has not run because
+no API key was available. Live response compatibility remains unverified. With
+a key, the end-to-end test checks a real judgment and then reuses its cached result.
 
 To work against local SDK edits without changing the pinned module dependency:
 
