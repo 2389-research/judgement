@@ -1,0 +1,40 @@
+#!/bin/sh
+# ABOUTME: Runs the portable verification gate for the judgement CLI.
+# ABOUTME: Checks formatting, lint, race tests and builds; live tests require an API key.
+set -eu
+cd "$(dirname "$0")/.."
+
+case "${1:-}" in
+  --help|-h)
+    echo 'Usage: scripts/check'
+    echo 'Checks Go formatting, vet, golangci-lint when installed, race tests, and compilation.'
+    echo 'Set TYPESAFE_API_KEY to include the live API test (one billed request).'
+    exit 0 ;;
+  '') ;;
+  *) echo "Unknown argument: $1; use scripts/check --help" >&2; exit 2 ;;
+esac
+
+unformatted=$(gofmt -l .)
+if [ -n "$unformatted" ]; then
+  printf 'Run gofmt on:\n%s\n' "$unformatted" >&2
+  exit 1
+fi
+go vet ./...
+if command -v golangci-lint >/dev/null 2>&1; then
+  golangci-lint run ./...
+else
+  echo 'golangci-lint not installed; optional extended lint NOT RUN.'
+fi
+go test -race -count=1 ./...
+build_dir=$(mktemp -d)
+trap 'rm -rf "$build_dir"' EXIT HUP INT TERM
+go build -o "$build_dir/judgement" .
+"$build_dir/judgement" --json --help >/dev/null
+
+if [ -n "${TYPESAFE_API_KEY:-}" ]; then
+  go test -race -count=1 -tags=e2e -run '^TestLiveJudgement$' -v .
+else
+  echo 'TYPESAFE_API_KEY unset; live API test NOT RUN.'
+  go test -tags=e2e -run '^TestLiveJudgement$' -v .
+fi
+echo 'Local checks passed.'
