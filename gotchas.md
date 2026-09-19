@@ -48,3 +48,10 @@ Using go-version-file with this module would select the original Go 1.23.0 relea
 The global hook on this machine already calls prek, so keep core.hooksPath intact.
 Commit hooks clear TYPESAFE_API_KEY to avoid billed requests; explicit scripts/check
 with the key exported includes the live test.
+
+Homebrew publishing targets 2389-research/homebrew-tap, using HOMEBREW_TAP_TOKEN
+only in the tagged release workflow. Doctor Biz chose a formula over a cask to
+avoid unsigned-cask quarantine handling. Stable tags update the macOS/Linux formula;
+prerelease tags skip that upload. A snapshot validates generation but cannot prove
+the stored GitHub secret has permission to push to the tap. The Go generator uses
+GoReleaser metadata and checksums; do not add the deprecated brews configuration.
