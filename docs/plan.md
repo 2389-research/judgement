@@ -48,7 +48,7 @@ and the pinned github.com/2389-research/typesafe-go SDK. No framework or service
   binary test (real API only; skip explicitly when no key); build/install usage.
 - [x] Run canonical format/vet/race test/build checks and real local invocations.
 - [x] Fresh review; fix findings with regression tests; rerun required checks.
-- [ ] Commit on wip/judgement-cli and record verification and remaining limits.
+- [x] Commit on wip/judgement-cli and record verification and remaining limits.
 
 Success means positional and JSON inputs share validation and request behavior,
 JSON covers every outcome, checks pass, and the live-test status is explicit.
@@ -70,3 +70,6 @@ probabilities; human and JSON help share one definition.
 Known limitation (medium): live API compatibility and the probability-sum
 tolerance remain unverified against a live response. No source or test failures
 remain in the local gate. No remote or publication was configured.
+
+Implementation commit: `cc220c3`. Next step: run `scripts/check` with
+TYPESAFE_API_KEY set, then decide where to publish or merge the branch.
