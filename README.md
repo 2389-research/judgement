@@ -3,18 +3,82 @@
 Ask TypeSafe Jev to pick the best answer from a list. Read a short result in your
 terminal, or request JSON for every outcome.
 
-Requires Go 1.23 or later and a TypeSafe API key. The only dependency is
+Requires Go 1.23 or later and a TypeSafe API key. API requests use
 [typesafe-go](https://github.com/2389-research/typesafe-go), pinned to the commit
-used by the sibling checkout during development.
+used by the sibling checkout during development. Go's `x/term` package handles
+hidden terminal input during setup.
 
 ```sh
 go build -o judgement .
-export TYPESAFE_API_KEY='your-key'
+./judgement setup
 ./judgement "What is two plus two?" "four" "nine"
 ```
 
 To install into your Go bin directory, run `go install .` and ensure that directory
 is on your `PATH`. Then use `judgement` without `./`.
+
+## Setup
+
+`judgement setup` prompts for a TypeSafe API key without echoing it. It saves the
+key to `$XDG_CONFIG_HOME/judgement/config.json`, falling back to
+`$HOME/.config/judgement/config.json`, including on macOS. Relative XDG paths are
+ignored, following the [XDG specification](https://specifications.freedesktop.org/basedir/latest/).
+
+The file contains a plaintext key with user-only permissions (`0600`), inside a
+user-only application directory (`0700`). Writes replace the file atomically;
+running setup again replaces the saved key. Setup does not contact TypeSafe or
+verify that the key works.
+
+`TYPESAFE_API_KEY` takes precedence over the saved key. Set it to use a temporary
+credential or configure CI without writing a config file. For agents that need
+to save a key, pipe it from a secret manager:
+
+```sh
+your-secret-command | judgement setup --key-stdin --json
+judgement setup --json --help
+```
+
+`your-secret-command` represents your own command that emits a key. The CLI has
+no key argument, so it does not place the credential in shell history or process
+arguments. JSON setup requires `--key-stdin` and emits only a confirmation with
+`type: "setup"` and `config_path`; it never prints the key. Canceling the prompt
+leaves an existing credential untouched.
+
+## Opt-in cache
+
+```sh
+judgement --cache --json "Which is a fruit?" "apple" "granite"
+judgement --cache --cache-ttl 15m "Which is a fruit?" "apple" "granite"
+```
+
+`--cache` reuses successful results indefinitely when you select a pinned Jev
+version such as `--model jev-1.13.0`. Moving aliases (`jev-latest`, `jev-preview`)
+and other model names default to **24 hours**. `--cache-ttl` overrides this policy:
+use a positive Go duration for expiry or `0` for no expiry. It requires `--cache`.
+Without `--cache`, each
+judgment calls the API and leaves the cache alone.
+
+Entries live under `$XDG_CACHE_HOME/judgement`, falling back to
+`$HOME/.cache/judgement`. They store the question, answers, and result with the
+same user-only permissions as config; they never store the API key. The cache
+identity includes the ordered answers, question, model selection, API endpoint,
+and credential fingerprint. Equivalent JSON and positional inputs share entries;
+changing any request identity field causes a miss.
+
+JSON results include `cached: true` on a hit and `cached: false` on a fresh call.
+Human output shows `Cache: hit` or `Cache: miss`; quiet output remains just the
+answer. Cached usage counts describe the original request, not a new billed call.
+The alias TTL limits how long a name such as `jev-latest` can retain an older
+model's answer. It is an update policy, not an inherent lifetime of a judgment.
+TypeSafe documents that aliases move when releases ship and recommends pinning
+versions when stable behavior matters. For unchanged input and a fixed version,
+we expect long-lived reuse to be appropriate; this does not promise identical
+results on fresh calls. See [TypeSafe model versions](https://docs.typesafe.ai/models).
+
+Failed requests are not cached. Expired or malformed entries are replaced after
+a successful request; filesystem permission/write errors produce `cache_error`
+instead of silently disabling caching. There is no background cleanup: deleting
+this application's cache directory clears all entries.
 
 ## Inputs
 
@@ -60,6 +124,7 @@ Result objects have these fields:
 | `confidence` | Model confidence, separate from the winner's probability |
 | `model` | Model identifier returned by TypeSafe |
 | `usage` | `input_tokens` and `output_tokens` |
+| `cached` | Whether this result came from the local cache |
 
 Indexes start at **1**. Probabilities are numbers from 0 to 1. Answers remain in
 input order, so an agent can identify the winner without comparing strings.
@@ -72,8 +137,8 @@ Errors have this shape:
 
 | Exit | Meaning | Error codes |
 | --- | --- | --- |
-| 0 | Result, help, or version | — |
-| 1 | Configuration, API, response, or output failure | `configuration_error`, `api_error`, `invalid_response` |
+| 0 | Result, setup, help, or version | — |
+| 1 | Configuration, cache, API, response, or output failure | `configuration_error`, `cache_error`, `api_error`, `invalid_response` |
 | 2 | Invalid arguments or JSON input | `invalid_arguments` |
 
 Human output includes the winner and distribution. `--quiet` prints only the
@@ -86,11 +151,15 @@ stderr; it cannot deliver a JSON envelope through a broken output stream.
 
 | Setting | Default |
 | --- | --- |
-| `TYPESAFE_API_KEY` | Required for judgments; help and version work without it |
+| `TYPESAFE_API_KEY` | Overrides the key saved by setup; one source is required for judgments |
 | `TYPESAFE_DEFAULT_MODEL` | SDK default, `jev-latest` |
 | `TYPESAFE_BASE_URL` | SDK default, `https://api.typesafe.ai` |
 | `--model NAME` | Overrides `TYPESAFE_DEFAULT_MODEL` |
 | `--timeout DURATION` | `30s`, total request deadline including SDK retries |
+| `--cache` | Off |
+| `--cache-ttl DURATION` | No expiry for pinned Jev versions; `24h` otherwise; `0` means no expiry; requires `--cache` |
+| `XDG_CONFIG_HOME` | `$HOME/.config` |
+| `XDG_CACHE_HOME` | `$HOME/.cache` |
 
 Ctrl-C cancels the request. The SDK retries transient failures within the total
 deadline. A lost response can lead to a repeated, billed request; the SDK does

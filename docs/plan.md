@@ -1,5 +1,8 @@
 # Judgement CLI implementation plan
 
+This records the initial CLI. Current setup/config/cache behavior is specified
+in [setup-cache-plan.md](setup-cache-plan.md), which extends this baseline.
+
 Goal: choose the best supplied answer with TypeSafe Jev, from shell arguments or
 JSON, with usable human output and a complete JSON interface for agents.
 

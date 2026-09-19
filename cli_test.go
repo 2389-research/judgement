@@ -263,6 +263,7 @@ func TestRunJSONPrescanAcceptsFlagBooleanSyntax(t *testing.T) {
 }
 
 func TestRunJSONPrescanRespectsValuesAndBoundaries(t *testing.T) {
+	t.Setenv("TYPESAFE_API_KEY", "")
 	cases := [][]string{
 		{"--model", "--json", "q", "a", "b"},
 		{"--input-json", "--json"},

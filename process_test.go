@@ -111,6 +111,37 @@ func TestProcessHumanAndFileInput(t *testing.T) {
 	}
 }
 
+func TestProcessSetupStoresPrivateKey(t *testing.T) {
+	isolateFeatureStorage(t)
+	binary := buildCLI(t)
+	for _, key := range []string{"first-disposable-key", "replacement-disposable-key"} {
+		out, stderr, code := invokeCLI(t, binary, key+"\n", "setup", "--key-stdin", "--json")
+		if code != 0 || stderr != "" || strings.Contains(out, key) || !json.Valid([]byte(out)) {
+			t.Fatalf("setup: exit=%d out=%q stderr=%q", code, out, stderr)
+		}
+		file := filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "judgement", "config.json")
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var config struct {
+			APIKey string `json:"api_key"`
+		}
+		if err := json.Unmarshal(raw, &config); err != nil || config.APIKey != key {
+			t.Fatal("setup did not persist the supplied credential")
+		}
+		for path, want := range map[string]os.FileMode{file: 0o600, filepath.Dir(file): 0o700} {
+			info, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if runtime.GOOS != "windows" && info.Mode().Perm() != want {
+				t.Fatalf("mode for %s = %o, want %o", path, info.Mode().Perm(), want)
+			}
+		}
+	}
+}
+
 func TestProcessSignalWhileReadingStdin(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX signal scenario")

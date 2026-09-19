@@ -22,6 +22,7 @@ import (
 const (
 	version              = "dev"
 	defaultTimeout       = 30 * time.Second
+	defaultCacheTTL      = 24 * time.Hour
 	maximumInputBytes    = 1 << 20
 	choiceID             = "best"
 	choiceInstructions   = "Choose the best answer to the question."
@@ -40,6 +41,9 @@ type commandOptions struct {
 	timeout      time.Duration
 	inputSet     bool
 	inputJSONSet bool
+	cache        bool
+	cacheTTL     time.Duration
+	cacheTTLSet  bool
 }
 
 type requestInput struct {
@@ -61,6 +65,7 @@ type resultOutput struct {
 	Confidence float64        `json:"confidence"`
 	Model      string         `json:"model"`
 	Usage      typesafe.Usage `json:"usage"`
+	Cached     bool           `json:"cached"`
 }
 
 type cliError struct {
@@ -93,6 +98,7 @@ type helpOutput struct {
 	Environment []helpItem      `json:"environment"`
 	ExitCodes   []helpExitCode  `json:"exit_codes"`
 	Examples    []string        `json:"examples"`
+	Commands    []helpItem      `json:"commands,omitempty"`
 }
 
 func (e *cliError) Error() string { return e.message }
@@ -100,6 +106,9 @@ func (e *cliError) Error() string { return e.message }
 type choiceOption string
 
 func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if setupArgs, ok := setupCommandArgs(args); ok {
+		return runSetup(ctx, setupArgs, stdin, stdout, stderr)
+	}
 	jsonMode := detectJSONMode(args)
 	opts, positionals, err := parseOptions(args)
 	if err != nil {
@@ -128,7 +137,11 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return writeFailure(stdout, stderr, jsonMode, invalidArguments(err.Error()))
 	}
 
-	clientOptions := []typesafe.Option{typesafe.WithTimeout(opts.timeout)}
+	apiKey, err := withContext(ctx, resolveAPIKey)
+	if err != nil {
+		return writeFailure(stdout, stderr, jsonMode, &cliError{"configuration_error", err.Error(), 1})
+	}
+	clientOptions := []typesafe.Option{typesafe.WithTimeout(opts.timeout), typesafe.WithAPIKey(apiKey)}
 	if baseURL := os.Getenv(typesafe.EnvBaseURL); baseURL != "" {
 		clientOptions = append(clientOptions, typesafe.WithBaseURL(baseURL))
 	}
@@ -142,6 +155,39 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 			message = "set TYPESAFE_API_KEY to a valid TypeSafe API key"
 		}
 		return writeFailure(stdout, stderr, jsonMode, &cliError{"configuration_error", message, 1})
+	}
+	var identity string
+	if opts.cache {
+		model := os.Getenv(typesafe.EnvModel)
+		if model == "" {
+			model = typesafe.DefaultModel
+		}
+		if opts.modelSet {
+			model = opts.model
+		}
+		baseURL := os.Getenv(typesafe.EnvBaseURL)
+		if baseURL == "" {
+			baseURL = typesafe.DefaultBaseURL
+		}
+		identity = cacheIdentity(input, model, baseURL, apiKey)
+		type lookup struct {
+			result resultOutput
+			hit    bool
+		}
+		cached, err := withContext(ctx, func() (lookup, error) {
+			result, hit, err := loadCachedResult(identity, input, effectiveCacheTTL(opts, model), time.Now())
+			return lookup{result, hit}, err
+		})
+		if err != nil {
+			return writeFailure(stdout, stderr, jsonMode, &cliError{"cache_error", "cannot read cache: " + err.Error(), 1})
+		}
+		if cached.hit {
+			cached.result.Cached = true
+			if err := writeResult(stdout, cached.result, opts); err != nil {
+				return reportWriteFailure(stderr, err)
+			}
+			return 0
+		}
 	}
 
 	options, optionIDs := makeChoiceOptions(input.Answers)
@@ -161,11 +207,68 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	if err != nil {
 		return writeFailure(stdout, stderr, jsonMode, invalidResponse(err.Error()))
 	}
+	if opts.cache {
+		_, err := withContext(ctx, func() (struct{}, error) {
+			return struct{}{}, saveCachedResult(identity, result, time.Now())
+		})
+		if err != nil {
+			return writeFailure(stdout, stderr, jsonMode, &cliError{"cache_error", "cannot write cache: " + err.Error(), 1})
+		}
+	}
 
 	if err := writeResult(stdout, result, opts); err != nil {
 		return reportWriteFailure(stderr, err)
 	}
 	return 0
+}
+
+// Preserve questions named "setup" and the explicit -- positional boundary.
+func setupCommandArgs(args []string) ([]string, bool) {
+	for i, arg := range args {
+		if arg == "setup" {
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				return nil, false
+			}
+			tail := args[i+1:]
+			keyInput := false
+			for _, candidate := range tail {
+				name, _, _ := strings.Cut(strings.TrimLeft(candidate, "-"), "=")
+				if name == "key-stdin" {
+					keyInput = true
+				}
+			}
+			if len(tail) >= 2 && !keyInput {
+				for _, candidate := range tail {
+					_, numericErr := strconv.ParseFloat(candidate, 64)
+					if !strings.HasPrefix(candidate, "-") || numericErr == nil {
+						return nil, false
+					}
+				}
+			}
+			setupArgs := append([]string(nil), args[:i]...)
+			return append(setupArgs, args[i+1:]...), true
+		}
+		name, _, _ := strings.Cut(strings.TrimLeft(arg, "-"), "=")
+		if !strings.HasPrefix(arg, "-") || (name != "json" && name != "help" && name != "h") {
+			return nil, false
+		}
+	}
+	return nil, false
+}
+
+func effectiveCacheTTL(opts commandOptions, model string) time.Duration {
+	if !opts.cacheTTLSet && strings.HasPrefix(model, "jev-") {
+		parts := strings.Split(strings.TrimPrefix(model, "jev-"), ".")
+		if len(parts) == 3 {
+			for _, part := range parts {
+				if _, err := strconv.ParseUint(part, 10, 32); err != nil {
+					return opts.cacheTTL
+				}
+			}
+			return 0
+		}
+	}
+	return opts.cacheTTL
 }
 
 func parseOptions(args []string) (commandOptions, []string, error) {
@@ -182,6 +285,8 @@ func parseOptions(args []string) (commandOptions, []string, error) {
 	flags.BoolVar(&opts.version, "version", false, "show version")
 	flags.StringVar(&opts.model, "model", "", "use a TypeSafe model")
 	flags.StringVar(&timeoutText, "timeout", defaultTimeout.String(), "set total request timeout")
+	flags.BoolVar(&opts.cache, "cache", false, "cache successful judgments")
+	flags.DurationVar(&opts.cacheTTL, "cache-ttl", defaultCacheTTL, "set cached result lifetime")
 
 	if err := flags.Parse(args); err != nil {
 		return commandOptions{}, nil, fmt.Errorf("invalid arguments: %w", err)
@@ -194,8 +299,16 @@ func parseOptions(args []string) (commandOptions, []string, error) {
 			opts.inputJSONSet = true
 		case "model":
 			opts.modelSet = true
+		case "cache-ttl":
+			opts.cacheTTLSet = true
 		}
 	})
+	if opts.cacheTTLSet && !opts.cache {
+		return commandOptions{}, nil, errors.New("--cache-ttl requires --cache")
+	}
+	if opts.cacheTTL < 0 {
+		return commandOptions{}, nil, errors.New("cache TTL must not be negative; use 0 for no expiry")
+	}
 
 	if opts.modelSet && strings.TrimSpace(opts.model) == "" {
 		return commandOptions{}, nil, errors.New("model cannot be blank")
@@ -219,7 +332,7 @@ func detectJSONMode(args []string) bool {
 			break
 		}
 		switch arg {
-		case "--input", "-input", "--input-json", "-input-json", "--model", "-model", "--timeout", "-timeout":
+		case "--input", "-input", "--input-json", "-input-json", "--model", "-model", "--timeout", "-timeout", "--cache-ttl", "-cache-ttl":
 			i++
 			continue
 		case "--json", "-json", "--json=true", "-json=true":
@@ -271,20 +384,26 @@ func loadInput(opts commandOptions, positionals []string, stdin io.Reader) (requ
 }
 
 func loadInputContext(ctx context.Context, opts commandOptions, positionals []string, stdin io.Reader) (requestInput, error) {
+	return withContext(ctx, func() (requestInput, error) { return loadInput(opts, positionals, stdin) })
+}
+
+// Blocking filesystem and input operations must not swallow process cancellation.
+func withContext[T any](ctx context.Context, operation func() (T, error)) (T, error) {
 	type result struct {
-		input requestInput
+		value T
 		err   error
 	}
 	loaded := make(chan result, 1)
 	go func() {
-		input, err := loadInput(opts, positionals, stdin)
-		loaded <- result{input, err}
+		value, err := operation()
+		loaded <- result{value, err}
 	}()
 	select {
 	case result := <-loaded:
-		return result.input, result.err
+		return result.value, result.err
 	case <-ctx.Done():
-		return requestInput{}, ctx.Err()
+		var zero T
+		return zero, ctx.Err()
 	}
 }
 
@@ -440,6 +559,15 @@ func writeResult(writer io.Writer, result resultOutput, opts commandOptions) err
 			return err
 		}
 	}
+	if opts.cache {
+		status := "miss"
+		if result.Cached {
+			status = "hit"
+		}
+		if _, err := fmt.Fprintln(writer, "Cache: "+status); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -477,6 +605,7 @@ func writeHelp(stdout, stderr io.Writer, jsonMode bool) int {
 			`judgement [flags] "question" "answer1" "answer2" ...`,
 			"judgement [flags] --input FILE",
 			"judgement [flags] --input-json JSON",
+			"judgement setup [--key-stdin] [--json]",
 		},
 		Flags: []helpItem{
 			{"--input FILE", "read JSON from FILE or - for stdin"},
@@ -485,6 +614,8 @@ func writeHelp(stdout, stderr io.Writer, jsonMode bool) int {
 			{"--quiet", "emit only the winning answer"},
 			{"--model NAME", "override the configured model"},
 			{"--timeout DURATION", "set the total request timeout; default 30s"},
+			{"--cache", "reuse successful judgments from the local cache"},
+			{"--cache-ttl DURATION", "cached result lifetime; 0 means no expiry; default 24h for aliases, no expiry for pinned Jev versions; requires --cache"},
 			{"--help, -h", "show help"},
 			{"--version", "show version"},
 		},
@@ -494,19 +625,22 @@ func writeHelp(stdout, stderr io.Writer, jsonMode bool) int {
 			Constraints: []string{"unknown fields and trailing JSON are rejected", "question and answers must be nonblank", "answers must be unique", "maximum size is 1 MiB"},
 		},
 		Environment: []helpItem{
-			{"TYPESAFE_API_KEY", "required API key"},
+			{"TYPESAFE_API_KEY", "API key; overrides the credential saved by setup"},
 			{"TYPESAFE_BASE_URL", "optional API base URL"},
 			{"TYPESAFE_DEFAULT_MODEL", "optional default model"},
+			{"XDG_CONFIG_HOME", "config base directory; defaults to $HOME/.config"},
+			{"XDG_CACHE_HOME", "cache base directory; defaults to $HOME/.cache"},
 		},
 		ExitCodes: []helpExitCode{
-			{0, "result, help, or version"},
-			{1, "configuration, API, invalid response, or output failure"},
+			{0, "result, setup, help, or version"},
+			{1, "configuration, cache, API, invalid response, or output failure"},
 			{2, "invalid arguments or input"},
 		},
 		Examples: []string{
 			`judgement "Best snack?" "chips" "apple"`,
 			`judgement --json --input request.json`,
 		},
+		Commands: []helpItem{{"setup", "save a TypeSafe API key; use setup --help for details"}},
 	}
 	if jsonMode {
 		if err := json.NewEncoder(stdout).Encode(help); err != nil {
@@ -536,6 +670,16 @@ func writeHumanHelp(writer io.Writer, help helpOutput) error {
 	for _, flag := range help.Flags {
 		if _, err := fmt.Fprintf(writer, "  %-20s %s\n", flag.Name, flag.Description); err != nil {
 			return err
+		}
+	}
+	if len(help.Commands) > 0 {
+		if _, err := io.WriteString(writer, "\nCommands:\n"); err != nil {
+			return err
+		}
+		for _, command := range help.Commands {
+			if _, err := fmt.Fprintf(writer, "  %-20s %s\n", command.Name, command.Description); err != nil {
+				return err
+			}
 		}
 	}
 	if _, err := fmt.Fprintf(writer, "\nJSON input: %s\n\nEnvironment:\n", help.InputFormat.Example); err != nil {

@@ -21,3 +21,18 @@ input-reading goroutine is not a reusable library API.
 Local checks passed on 2026-09-19, but the live test needs an API key before
 shipping; in particular the 1e-6 probability-sum tolerance has only fixture
 coverage. Do not mistake the local HTTP transport fixtures for live API evidence.
+
+Setup uses XDG paths on macOS too, rather than Go's platform-specific config/cache
+defaults. Relative XDG bases are ignored. TYPESAFE_API_KEY overrides saved config.
+Tests isolate config/cache roots and use only disposable keys.
+
+Doctor Biz challenged the initial blanket cache TTL. Research the model before
+assuming results age: unchanged input plus pinned Jev version defaults to no
+expiry; moving aliases use 24h as an update policy. --cache-ttl 0 explicitly keeps
+entries forever. Official model and consistency docs are linked in
+docs/setup-cache-plan.md. Do not claim Jev is exactly deterministic.
+
+On macOS, a terminal restore may set the transient PENDIN bit (0x20000000).
+A plain `stty -icanon -echo` followed by restoring the captured state reproduces
+the same difference. Verify echo/canonical/signal flags and restored behavior,
+rather than treating PENDIN alone as evidence that setup left the terminal raw.
