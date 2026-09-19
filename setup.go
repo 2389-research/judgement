@@ -29,7 +29,7 @@ func runSetup(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		return writeFailure(stdout, stderr, jsonMode, invalidArguments("invalid setup arguments: "+err.Error()))
 	}
 	if flags.NArg() != 0 {
-		return writeFailure(stdout, stderr, jsonMode, invalidArguments("unexpected setup argument"))
+		return writeFailure(stdout, stderr, jsonMode, invalidArguments("setup takes no key argument; run 'judgement setup' and enter it at the prompt, or pipe it with --key-stdin"))
 	}
 	if help {
 		return writeSetupHelp(stdout, stderr, jsonMode)

@@ -125,7 +125,7 @@ func TestRunSetupRejectsInvalidModesBeforeReadingInput(t *testing.T) {
 		want string
 	}{
 		{"JSON requires stdin", []string{"--json"}, "--key-stdin"},
-		{"unexpected positional", []string{"--key-stdin", "extra"}, "unexpected"},
+		{"unexpected positional", []string{"--key-stdin", "extra"}, "no key argument"},
 		{"unknown flag", []string{"--key-stdin", "--wat"}, "flag"},
 	}
 	for _, tc := range cases {

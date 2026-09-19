@@ -91,21 +91,42 @@ func TestSetupRoutingPreservesJSONAndQuestion(t *testing.T) {
 			t.Fatalf("args=%q out=%q stderr=%q", args, out, stderr)
 		}
 	}
+	// Only `--` escapes "setup" back to a judgment question. Without it, a leading
+	// "setup" is the subcommand and never becomes a billed judgment.
+	out, _, code := runCLI(t, context.Background(), nil, "--json", "--", "setup", "A", "B")
+	if code != 1 || !strings.Contains(out, "configuration_error") {
+		t.Fatalf("`-- setup` was not treated as a question: exit=%d out=%q", code, out)
+	}
 	for _, args := range [][]string{
-		{"--json", "--", "setup", "A", "B"},
 		{"--json", "setup", "A", "B"},
 		{"--json", "setup", "-1", "+1"},
 		{"--json", "setup", "-1", "-2"},
 		{"--json", "setup", "-alpha", "beta"},
 	} {
 		out, _, code := runCLI(t, context.Background(), nil, args...)
-		if code != 1 || !strings.Contains(out, "configuration_error") {
-			t.Fatalf("question setup was treated as a subcommand: exit=%d out=%q", code, out)
+		if code != 2 || !strings.Contains(out, "invalid_arguments") {
+			t.Fatalf("leading setup was not routed to the subcommand: args=%q exit=%d out=%q", args, code, out)
 		}
 	}
-	out, _, code := runCLI(t, context.Background(), strings.NewReader("disposable\n"), "setup", "--json", "--key-stdin", "extra")
+	out, _, code = runCLI(t, context.Background(), strings.NewReader("disposable\n"), "setup", "--json", "--key-stdin", "extra")
 	if code != 2 || !strings.Contains(out, "invalid_arguments") {
 		t.Fatalf("setup accepted an extra argument: exit=%d out=%q", code, out)
+	}
+}
+
+func TestSetupRejectsKeyArgumentWithGuidance(t *testing.T) {
+	isolateFeatureStorage(t)
+	// Passing the key as an argument is the natural mistake. It must not fall through
+	// to the judgment path or fire an API request, and it must explain how to set the key.
+	stdout, stderr, exit := runCLI(t, context.Background(), nil, "setup", "sk-mykey")
+	if exit != 2 {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", exit, stdout, stderr)
+	}
+	if strings.Contains(stderr, "at least two answers") {
+		t.Fatalf("setup <key> fell through to the judgment path: %q", stderr)
+	}
+	if !strings.Contains(stderr, "setup takes no key argument") || !strings.Contains(stderr, "--key-stdin") {
+		t.Fatalf("missing setup guidance: %q", stderr)
 	}
 }
 
