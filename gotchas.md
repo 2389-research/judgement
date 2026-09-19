@@ -50,8 +50,17 @@ Commit hooks clear TYPESAFE_API_KEY to avoid billed requests; explicit scripts/c
 with the key exported includes the live test.
 
 Homebrew publishing targets 2389-research/homebrew-tap, using HOMEBREW_TAP_TOKEN
-only in the tagged release workflow. Doctor Biz chose a formula over a cask to
-avoid unsigned-cask quarantine handling. Stable tags update the macOS/Linux formula;
-prerelease tags skip that upload. A snapshot validates generation but cannot prove
-the stored GitHub secret has permission to push to the tap. The Go generator uses
-GoReleaser metadata and checksums; do not add the deprecated brews configuration.
+only in the tagged release workflow. judgement ships as a macOS cask copied from
+the sibling project chronicle, reversing the earlier formula choice (Doctor Biz
+called the formula choice incorrect). Stable tags publish Casks/judgement.rb and
+delete the retired Formula/judgement.rb; prerelease tags skip the tap write. The
+v0.0.1 stable release (2026-09-19) proved the stored HOMEBREW_TAP_TOKEN can push
+to the tap; that release shipped the now-retired formula. The Go generator
+(internal/cmd/homebrew-cask) reads GoReleaser metadata and checksums, verifies the
+two macOS archives, and rejects any non-judgement or non-semver metadata. It only
+validates the tag against the semver pattern, never tag == "v"+version: goreleaser
+snapshots carry version 0.0.1-SNAPSHOT-<commit> against tag v0.0.1, and CI's
+release-check runs the generator on that snapshot. Do not add goreleaser's brews
+or homebrew_casks configuration; the custom generator is intentional. CI checks
+generation and Ruby syntax only — an unsigned cask can't be install-tested in
+headless CI, so there is no macOS install smoke test (chronicle's CI skips it too).

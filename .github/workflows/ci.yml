@@ -72,9 +72,9 @@ jobs:
         with:
           version: '~> v2'
           args: release --snapshot --clean
-      - name: Validate Homebrew formula generation
+      - name: Validate Homebrew cask generation
         run: |
-          go run ./internal/cmd/homebrew-formula --dist dist > dist/judgement.rb
+          go run ./internal/cmd/homebrew-cask --dist dist > dist/judgement.rb
           ruby -c dist/judgement.rb
       - uses: actions/upload-artifact@v7
         with:
@@ -83,16 +83,3 @@ jobs:
             dist/judgement.rb
             dist/*.tar.gz
           retention-days: 1
-
-  homebrew:
-    name: Test Homebrew install
-    needs: release-check
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
-        with:
-          name: homebrew-snapshot
-          path: dist
-      - name: Install and test the real snapshot
-        run: ruby scripts/test-homebrew.rb

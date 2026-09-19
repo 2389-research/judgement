@@ -55,9 +55,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate Homebrew formula
+      - name: Generate Homebrew cask
         if: steps.release-kind.outputs.stable == 'true'
-        run: go run ./internal/cmd/homebrew-formula --dist dist > "$RUNNER_TEMP/judgement.rb"
+        run: go run ./internal/cmd/homebrew-cask --dist dist > "$RUNNER_TEMP/judgement.rb"
 
       - name: Check out Homebrew tap
         if: steps.release-kind.outputs.stable == 'true'
@@ -67,16 +67,18 @@ jobs:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: homebrew-tap
 
-      - name: Publish Homebrew formula
+      - name: Publish Homebrew cask
         if: steps.release-kind.outputs.stable == 'true'
         env:
           TAG_NAME: ${{ github.ref_name }}
         run: |
-          mkdir -p homebrew-tap/Formula
-          cp "$RUNNER_TEMP/judgement.rb" homebrew-tap/Formula/judgement.rb
+          mkdir -p homebrew-tap/Casks
+          cp "$RUNNER_TEMP/judgement.rb" homebrew-tap/Casks/judgement.rb
           git -C homebrew-tap config user.name 'github-actions[bot]'
           git -C homebrew-tap config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git -C homebrew-tap add Formula/judgement.rb
+          # Retire the formula the earlier release left behind; judgement now ships as a cask.
+          git -C homebrew-tap rm --ignore-unmatch --quiet Formula/judgement.rb
+          git -C homebrew-tap add Casks/judgement.rb
           if ! git -C homebrew-tap diff --cached --quiet; then
             git -C homebrew-tap commit -m "Update judgement to $TAG_NAME"
             git -C homebrew-tap push
