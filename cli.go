@@ -107,6 +107,11 @@ func (e *cliError) Error() string { return e.message }
 type choiceOption string
 
 func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	// A bare invocation is someone exploring the tool, not a botched request; show help
+	// rather than the terse "missing input" usage error.
+	if len(args) == 0 {
+		return writeHelp(stdout, stderr, false)
+	}
 	if setupArgs, ok := setupCommandArgs(args); ok {
 		return runSetup(ctx, setupArgs, stdin, stdout, stderr)
 	}
