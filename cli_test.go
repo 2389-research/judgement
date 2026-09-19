@@ -343,6 +343,13 @@ func TestRunHumanHelpVersionAndFailuresUseExpectedStreams(t *testing.T) {
 	}
 }
 
+func TestRunNoArgumentsShowsHelp(t *testing.T) {
+	stdout, stderr, exit := runCLI(t, context.Background(), nil)
+	if exit != 0 || stderr != "" || !strings.Contains(stdout, "Usage: judgement") {
+		t.Fatalf("no-args exit=%d stdout=%q stderr=%q", exit, stdout, stderr)
+	}
+}
+
 func TestRunConfigurationErrorDoesNotLeakCredential(t *testing.T) {
 	t.Setenv("TYPESAFE_API_KEY", "secret-do-not-print")
 	t.Setenv("TYPESAFE_BASE_URL", "://bad")

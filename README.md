@@ -94,7 +94,9 @@ this application's cache directory clears all entries.
 ## Inputs
 
 Pass a question and at least two distinct, nonblank answers. Put flags before the
-question. Use `--` if the question starts with a dash.
+question. Use `--` if the question starts with a dash, or to ask a judgment whose
+question is literally `setup` (a leading `setup` runs the setup command). Running
+`judgement` with no arguments prints the help text, the same as `--help`.
 
 ```sh
 judgement --json "Which is a fruit?" "apple" "granite" "steel" "glass"

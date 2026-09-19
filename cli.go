@@ -107,6 +107,11 @@ func (e *cliError) Error() string { return e.message }
 type choiceOption string
 
 func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	// A bare invocation is someone exploring the tool, not a botched request; show help
+	// rather than the terse "missing input" usage error.
+	if len(args) == 0 {
+		return writeHelp(stdout, stderr, false)
+	}
 	if setupArgs, ok := setupCommandArgs(args); ok {
 		return runSetup(ctx, setupArgs, stdin, stdout, stderr)
 	}
@@ -223,29 +228,12 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	return 0
 }
 
-// Preserve questions named "setup" and the explicit -- positional boundary.
+// A leading "setup" (optionally after --json/--help) is the setup subcommand;
+// everything after it belongs to the setup flag parser, which rejects a key passed
+// as an argument. Escape a judgment whose question is literally "setup" with `--`.
 func setupCommandArgs(args []string) ([]string, bool) {
 	for i, arg := range args {
 		if arg == "setup" {
-			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				return nil, false
-			}
-			tail := args[i+1:]
-			keyInput := false
-			for _, candidate := range tail {
-				name, _, _ := strings.Cut(strings.TrimLeft(candidate, "-"), "=")
-				if name == "key-stdin" {
-					keyInput = true
-				}
-			}
-			if len(tail) >= 2 && !keyInput {
-				for _, candidate := range tail {
-					_, numericErr := strconv.ParseFloat(candidate, 64)
-					if !strings.HasPrefix(candidate, "-") || numericErr == nil {
-						return nil, false
-					}
-				}
-			}
 			setupArgs := append([]string(nil), args[:i]...)
 			return append(setupArgs, args[i+1:]...), true
 		}

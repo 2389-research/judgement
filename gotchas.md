@@ -27,6 +27,13 @@ Setup uses XDG paths on macOS too, rather than Go's platform-specific config/cac
 defaults. Relative XDG bases are ignored. TYPESAFE_API_KEY overrides saved config.
 Tests isolate config/cache roots and use only disposable keys.
 
+A leading `setup` is always the setup subcommand, which takes no key argument, so
+`judgement setup <key>` returns a "no key argument" error (enter the key at the
+prompt or pipe it with --key-stdin) rather than falling through to a judgment or a
+billed API call. Escape a judgment whose question is literally "setup" with
+`judgement -- setup ...`. Running judgement with no arguments prints help (exit 0),
+the same as --help, not the terse missing-input error.
+
 Doctor Biz challenged the initial blanket cache TTL. Research the model before
 assuming results age: unchanged input plus pinned Jev version defaults to no
 expiry; moving aliases use 24h as an update policy. --cache-ttl 0 explicitly keeps
