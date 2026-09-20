@@ -5,7 +5,8 @@ version: 2
 project_name: judgement
 
 builds:
-  - main: .
+  - id: judgement
+    main: .
     binary: judgement
     env:
       - CGO_ENABLED=0
@@ -19,6 +20,25 @@ builds:
       - -trimpath
     ldflags:
       - -s -w -X main.version={{.Version}}
+
+# Sign the macOS binaries with the 2389 Developer ID Application certificate and
+# notarize them with Apple. Without this, Homebrew quarantines an un-notarized
+# binary and Gatekeeper hangs on its first launch. Runs only when the signing
+# secret is present, so local and CI snapshot builds stay unsigned and green.
+notarize:
+  macos:
+    - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
+      ids:
+        - judgement
+      sign:
+        certificate: "{{.Env.MACOS_SIGN_P12}}"
+        password: "{{.Env.MACOS_SIGN_PASSWORD}}"
+      notarize:
+        issuer_id: "{{.Env.MACOS_NOTARY_ISSUER_ID}}"
+        key_id: "{{.Env.MACOS_NOTARY_KEY_ID}}"
+        key: "{{.Env.MACOS_NOTARY_KEY}}"
+        wait: true
+        timeout: 20m
 
 archives:
   - formats: [tar.gz]
