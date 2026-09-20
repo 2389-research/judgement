@@ -71,3 +71,22 @@ release-check runs the generator on that snapshot. Do not add goreleaser's brews
 or homebrew_casks configuration; the custom generator is intentional. CI checks
 generation and Ruby syntax only — an unsigned cask can't be install-tested in
 headless CI, so there is no macOS install smoke test (chronicle's CI skips it too).
+
+The cask ships a prebuilt binary that Homebrew marks with com.apple.quarantine;
+macOS Gatekeeper hangs on the first launch of a quarantined, un-notarized binary,
+so a brew-installed judgement appeared to hang on every command (setup, bare,
+--help). Fixed by a notarize.macos block in .goreleaser.yml (ships in v0.0.4),
+gated on isEnvSet MACOS_SIGN_P12 so local and CI snapshot builds stay unsigned and
+green. It signs the darwin builds with the 2389 Developer ID Application cert (team
+HD9NM9NSMK) and notarizes with the App Store Connect Developer key BHN2KMQ235;
+GoReleaser's cross-platform notarize.macos runs on ubuntu-latest, ordered build →
+notarize → archive → checksum so archives hold the signed binary. Five repo secrets
+back it (MACOS_SIGN_P12, MACOS_SIGN_PASSWORD, MACOS_NOTARY_KEY, MACOS_NOTARY_KEY_ID,
+MACOS_NOTARY_ISSUER_ID), sourced from the vault at
+/Users/harper/workspace/icloud-2389/Apple/2389; never print or commit the .p12/.p8
+or the p12 password. A bare CLI can't be stapled, so the first run does an online
+Gatekeeper check; spctl -a -t exec always says "does not seem to be an app" for a
+bare CLI and is not a notarization failure — Apple accepting the notarization is the
+proof. Sibling toki dodges the same hang without notarization by stripping
+com.apple.quarantine in a cask post-install hook; judgement chose notarization and
+keeps its custom cask generator.
